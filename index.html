@@ -1,0 +1,182 @@
+<head>
+<style>
+body {
+    font:13.34px helvetica,arial,freesans,clean,sans-serif;
+    color:black;
+    line-height:1.4em;
+    background-color: #F8F8F8;
+    padding: 0.7em;
+}
+pre {
+    margin:1em 0;
+    font-size:12px;
+    background-color:#eee;
+    border:1px solid #ddd;
+    padding:5px;
+    line-height:1.5em;
+    color:#444;
+    overflow:auto;
+    -webkit-box-shadow:rgba(0,0,0,0.07) 0 1px 2px inset;
+    -webkit-border-radius:3px;
+    -moz-border-radius:3px;border-radius:3px;
+}
+pre code {
+    padding:0;
+    font-size:12px;
+    background-color:#eee;
+    border:none;
+}
+code {
+    font-size:12px;
+    background-color:#f8f8ff;
+    color:#444;
+    padding:0 .2em;
+    border:1px solid #dedede;
+}
+</style>
+</head>
+<body>
+<h1>QGIS Co-traveler Plugin</h1>
+<p>Co-traveler problems are generally concerned with discovering a set of objects which travel together from among a collection of moving objects. The data is in the form of timestamped locations, along with an identifier of the object that the timestamped locations belong to. The data is grouped according to these identifiers into tracks, where each track is a collection of timestamped locations. The cotravel plugin computes distances (scores) between tracks. Here is a simple example.</p>
+<p><img src="images/example_tracks_1.png?raw=true" alt="tracks A and B" width="400" title="Score(A,B)=3"></p>
+<p>The distance between these two tracks "A" and "B" above is calculated by averaging the 5 sampled distances (an oversimplification for now, a more accurate explanation later), marked in the image below with dotted lines, </p>
+<p><img src="images/example_tracks_1a.png?raw=true" alt="scoring track pair (A,B)" width="400" title="Score(A,B) = (4+3+2+2+3)/5 = 3"></p>
+<p>resulting in a score of (4+3+2+2+3)/5 = 3 grid units. How these samples were chosen is determined by the parameter time bin size, to be further explained later below. (Here time bin size was set to 1 hour.) Here are some definitions:</p>
+<ul>
+<li>A <strong><em>ping</em></strong>, also known as a <strong><em>point</em></strong>, is a timestamped coordinate.</li>
+<li>A <strong><em>track</em></strong> is a sequence of pings ordered by time.</li>
+</ul>
+<p>Note that the distances between tracks "A" and "B" were computed only for the time period where both tracks existed. In this example, tracks "A" and "B" <em>overlapped</em> during the time period from 4:00 to 8:00.  The algorithm returns the following information for the track pair (A, B).</p>
+<ul>
+<li>ID 1: A</li>
+<li>ID 2: B</li>
+<li>score: 3</li>
+<li>overlap_start: unix timestamp number that corresponds to 4:00</li>
+<li>overlap_stop: unix timestamp number that corresponds to 8:00</li>
+<li>diameter_common: 7.35, the farthest apart two points are during the overlapping time period</li>
+<li>total_distance: 7.53, the average of the distances traveled by the two tracks, not just during the overlapping time period.</li>
+</ul>
+<p>For contrast, if we change the timestamps of track "A" and call the new track "C", the score between tracks "C" and "B" below would be "nonexistent" because the two tracks do not overlap in time.</p>
+<p><img src="images/example_tracks_2.png?raw=true" alt="tracks C and B" width="400" title="Score(C,B)=nonexistent"></p>
+<p>For applications where we are interested in vehicles that are near each other only part-time, we can also set the <em>minimum part-time window</em> parameter. This score is the best (smallest) distance averaged over all possible time windows of at least this size. For example, using the example of tracks "A" and "B" above, </p>
+<ul>
+<li><em>minimum part-time window</em> = 2 hr yields score = (2+2)/2 = 2 grid units</li>
+<li><em>minimum part-time window</em> = 4 hr yields score = (3+2+2+3)/2 = 2.5 grid units</li>
+<li><em>minimum part-time window</em> = 5 hr yields score = (4+3+2+2+3)/2 = 3 grid units</li>
+<li><em>minimum part-time window</em> = 6 hr yields score = nonexistent</li>
+</ul>
+<h2>Quick explanation of algorithm and time bin size</h2>
+<p>The most important parameter is the time bin size. The algorithm converts each track to a track of <strong><em>quantized pings (qpings)</em></strong>, with one <strong><em>qping</em></strong> per <strong><em>time bin</em></strong>. (A qping of a time bin is calculated as the centroid of the track within that time bin; but that's not important here.) These converted tracks of qpings are what allows the algorithm to compute various scores quickly. Here are some example results of the track "A" with various time bin sizes. </p>
+<ul>
+<li>
+<p>The actual path that gave rise to track "A": 
+<img src="images/example_tracks_1b.png?raw=true" alt="Acutal path that gave rise to track A" width="400" title="Acutal path that gave rise to track A"></p>
+</li>
+<li>
+<p>qpings when time bin size = 60 minutes: 
+<br> For convenience, we denote a time bin by the midpoint of the time bin. For example in this diagram, 7:00 indicates the 60 minute time bin from 6:30 to 7:30.
+The qping for this time bin is the centroid of the path during this time bin; note the qping might not be on the path because the qping is the average location during this time bin.</p>
+</li>
+</ul>
+<p><img src="images/example_tracks_3b.png?raw=true" alt="tracks A with time bin size = 60 minutes" width="400" title="time bin size = 60 minutes"></p>
+<ul>
+<li>
+<p>qpings when time bin size = 30 minutes: 
+<img src="images/example_tracks_4b.png?raw=true" alt="tracks A with time bin size = 30 minutes" width="400" title="time bin size = 30 minutes"></p>
+</li>
+<li>
+<p>qpings when time bin size = 120 minutes: 
+<img src="images/example_tracks_5b.png?raw=true" alt="tracks A with time bin size = 120 minutes" width="400" title="time bin size = 120 minutes"></p>
+</li>
+</ul>
+<p>An optimal choice of time bin size depends on the nature of the data, and properties such as density,speed, and quality. A reasonable first try is to choose a time bin size so as to get approximately 100 time bins. An alternate to choosing the time bin size is to choose the number of time bins; the default option is to choose 100 time bins. A begnning user of this plugin can simply use this default option.</p>
+<h2>Calculate co-traveler scores</h2>
+<p>Co-travel analysis begins by selecting <strong><em>Plugins-&gt;Co-travel tools-&gt;Calculate co-traveler scores</em></strong> from the QGIS menu or by clicking on this icon on the toolbar <img src="images/icon.png" alt="Toolbar co-travel icon" width="23">.</p>
+<div style="text-align:center"><img src="images/qgis_plugin_menu.png" alt="Co-traveler plugin" width="546"></div>
+
+<p>Once launched this dialog box is displayed.</p>
+<div style="text-align:center"><img src="images/cotravel_scores_algorithm.png" alt="Co-travel scores algorithm" width="488"></div>
+
+<p>This algorithm processes a point vector layer that contains pings that have a timestamp and unique identifier representing the same object traveling in space and time. The unique identifier groups are called <em>tracks</em> and the pings are sorted in the track by their timestamp. The algorithm output is a table that gives scores to pairs of tracks which best match the criteria that they are near each other in both time and space. After the scores are calculated the <strong>Analyze co-travelers</strong> tool will be displayed to examine co-travel pairs.</p>
+<p>The following are the plugin parameters necessary to run the algorithm.  Some are mandatory and some are optional.</p>
+<h3>Mandatory input parameters</h3>
+<ul>
+<li><strong>Input point layer:</strong> <em>(required)</em> Select an input point layer to be processed.</li>
+<li>
+<p><strong>Timestamp attribute:</strong> <em>(required)</em> This specifies the attribute in the input point layer that represents a date and time. This can be a numerical UNIX (Epoch) timestamp, QGIS QDateTime object, or an ISO8601 string format. This algorithm will attempt to parse other date and time string formats, but these might not be accurately interpreted.</p>
+</li>
+<li>
+<p><strong>Track group ID attribute:</strong> <em>(required)</em> This specifies the attribute in the input vector layer that represents the unique identifier that is used to cluster pings into tracks.</p>
+</li>
+<li>
+<p><strong>Group IDs (seeds) to look for:</strong> <em>(optional)</em> (May leave blank as default.) If there are unique group identifiers of interest, co-travel track comparisons will only be made using these identifiers against the rest of the tracks, including the other seeds.</p>
+</li>
+</ul>
+<h3>Important parameters, though defaults values may be used.</h3>
+<ul>
+<li>
+<p><strong>Remove layer feature filter before processing:</strong> (May use default value) The interactive analysis tool use filters on the data to view feature pairs. This can lead to problems if the layer has a filter when this algorithm is run, causing only the filtered features to be processed. When checked, this makes sure that there is no filter so all the data is processed.</p>
+</li>
+<li>
+<p><strong>Method to calculate time bin size:</strong> (May use default value)  If <em>Automatically determine size from # of time bins</em> is selected then the time bin size will be calculated as follows (maximum_time - minimum_time) / number_of_time_bins. If <em>Manually enter time bin size</em> is selected then <em>Number of time bins for automatic bin size</em> is ignored and the value in <em>Time bin size in minutes</em> is used.</p>
+</li>
+<li>
+<p><strong>Number of time bins for automatic bin size:</strong> (May use default value) This is only used when <em>Automatically determine size from # of time bins</em> has been selected above.</p>
+</li>
+<li>
+<p><strong>Time bin size in minutes:</strong> (May use default value)  This is only used when <em>Manually enter time bin size</em> has been selected above. This specifies the time bin size in minutes. </p>
+</li>
+<li>
+<p><strong>Part time minimum score (minutes):</strong> (Optional - may use default value of 0)  If this is 0, the algorithm will not do part time scoring. If it is non-zero, as explained above, it specifies the minimum time two objects must exist together and the score is the best (smallest) distance averaged over all possible windows of this size. That is, two objects must be near each other for at least this amount of time to have a good score.</p>
+</li>
+</ul>
+<h3>FILTERS (Advanced Parameters)</h3>
+<ul>
+<li>
+<p><strong>Maximum allowed score (meters):</strong> (May use default value of 20000) This filters output track pairs whose score is greater than this value. Remember that the score approximates the average distance that the two objects are apart during the times that both tracks exist.  Large scores indicate that the track pairs are not traveling together.  It is recommended that this is set to a reasonable number if there are many tracks.</p>
+</li>
+<li>
+<p><strong>Minimum pings per track:</strong> (May use default value of 2) This filters input tracks with number of pings fewer than this number. </p>
+</li>
+<li>
+<p><strong>Maximum velocity in meters per second:</strong> (May use default value of 500)  This filters pings in tracks. This is the maximum speed between two pings that is acceptable. Anything faster than this is ignored. This helps to remove bad pings.</p>
+</li>
+<li>
+<p><strong>Minimum pings per time bin:</strong> (May use default value of 0) This filters quantized pings by requiring a quantized ping's time bin to contain at least this many original pings. This is best used when comparing dense tracks to extremely sparse tracks - to be explained and implemented in future version. It is best to leave this at 0 for now.</p>
+</li>
+<li>
+<p><strong>Minimum diameter (meters):</strong> (May use default value of 0) This filters input tracks.  This is useful if we wish to ignore objects that do not move much. Ignore tracks whose diameter in meters is less than this value. The diameter of a track is the maximum distance between two of its pings.</p>
+</li>
+<li>
+<p><strong>Minimum qpings:</strong>  (May use default value of 2) This filters input tracks. Ignore a track if it exists in time bins fewer than this number.</p>
+</li>
+<li>
+<p><strong>Minimum common qpings:</strong> (May use defult value of 2) This filters output track pairs. Ignore a pair if both tracks exist together in fewer time bins than this number.  That is, we require a track pair to exist simultaneously for at least this many time bins.</p>
+</li>
+</ul>
+<h2>Analyze co-travelers</h2>
+<p>This tool is automatically enabled and populated when the <strong>Calculate co-traveler scores</strong> algorithm is finished, but it can also be launched from the Co-travel plugin menu or from the toolbar.</p>
+<div style="text-align:center"><img src="images/analyze.png" alt="Analyze co-travelers" width="228"></div>
+
+<ul>
+<li>
+<p><strong>Select original data layer</strong> This specifies the point vector layer that was used in the algorithm to calculate the co-traveler scores.</p>
+</li>
+<li>
+<p><strong>Select group ID column</strong> This is the same group ID used in the algorithm to calculate the co-traveler scores.</p>
+</li>
+<li>
+<p><strong>Select scores layer</strong> This is the output table from running the calculate the co-traveler scores algorithm. The important components to this table are the two group IDs or track pairs and their score that may be co-traveling pairs.</p>
+</li>
+<li>
+<p><strong>Load</strong> This loads the scores layer into the interactive table.</p>
+</li>
+<li>
+<p><strong>Auto zoom</strong> When this is checked and one of the co-traveling pairs are clicked in the table, then QGIS will zoom to fill the canvas with the pairs.</p>
+</li>
+<li>
+<p><strong>ID filter</strong> If an ID is entered into this box and the <em>Enter</em> key is pressed, this will filter the table below with only those pairs where the ID matches either <strong>ID 1</strong> or <strong>ID 2</strong>.</p>
+</li>
+</ul>
+<h3>QGIS Time Date Controller support</h3>
+<p>If the <strong><em>QGIS Time Date Controller (QTDC)</em></strong> plugin has been installed, then <strong><em>Analyze co-travelers</em></strong> has additional functionality to interact with that controller. The only parameter is to select the time attribute that was used in the original data when the scores were processed. Clicking on <strong>Show QTDC</strong> will display the controller. If the <strong><em>QTDC</em></strong> plugin has not been installer, then these extra capabilities will not be displayed.</p></body>
