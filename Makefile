@@ -1,7 +1,7 @@
 PLUGINNAME = cotraveler
 PLUGINS = "$(HOME)"/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins/$(PLUGINNAME)
 PY_FILES = __init__.py analysis.py cotraveler.py provider.py synchronous.py
-EXTRAS = cotravel.ui icon.png metadata.txt
+EXTRAS = cotravel.ui icon.png metadata.txt LICENSE
 
 deploy:
 	mkdir -p $(PLUGINS)
