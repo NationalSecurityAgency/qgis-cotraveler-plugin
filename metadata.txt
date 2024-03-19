@@ -2,7 +2,7 @@
 name=Co-Traveler
 qgisMinimumVersion=3.10
 description=Co-Traveler discovery tools.
-version=3.0.2
+version=3.0.3
 author=David S. Yuen, John Farina, C Hamilton
 email=adenaculture@gmail.com
 about=The co-traveler tools help discover, among a collection of moving objects, subsets of these objects which travel together.
@@ -15,4 +15,5 @@ icon=icon.png
 experimental=False
 deprecated=False
 changelog=
+    3.0.3 - Add license file to published plugin
     3.0.2 - First release.
